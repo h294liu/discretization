@@ -1,0 +1,89 @@
+#!/usr/bin/env Rscript
+# A. Wood, 20200520
+# calculating stats for two daily timeseries
+#    updated to take seg index
+
+# --- check & process command line args
+args <- commandArgs(TRUE)
+#args <- c("./model/route_out/sflow.h.2006-10-01-00000.nc", "IRFroutedRunoff", "107", "../../obs/obsflow.dly.DWRI1.cfs.csv", "cfs", "./test_stats.txt", "2007-10-01", "2012-09-30")
+
+if(length(args) != 8) {
+  message("(Usage) args: simQ_file simQ_varname simQ_index obs_file obs_units(cfs,cms) output_stats_file start_date end_date")
+  message(" --- Note: input obs data format is yyyy-mm-dd,flow  ... with header")
+  quit("no")
+}
+
+# load libraries
+library(zoo) 
+library(ncdf4)
+library(hydroGOF)
+library(xts)
+
+# --- read arguments
+simFile      <- as.character(args[1])   # netcdf routed flow output file (cms for now)
+qVarname     <- as.character(args[2])   # eg 'IRFroutedRunoff' from routed flow file
+qSegIndex    <- as.numeric(  args[3])   # number of segment in runoff netcdf file
+obsFile      <- as.character(args[4])   # csv file, fmt: <YYYY-MM-DD>,<flow in cfs|cms>
+obsUnit      <- as.character(args[5])   # cms or cfs
+outStatsFile <- as.character(args[6])   # txt file with calculated statistics
+statStartPer <- as.character(args[7])   # stats start date (YYYY-MM-DD)
+statEndPer   <- as.character(args[8])   # stats end date
+
+message("===== calculating stats for ", simFile, " =====")
+
+# read obs file
+obsDataZ <- read.zoo(obsFile, header=T, index.column = 1, format = "%Y-%m-%d", sep=",", na.strings=c("-99.0","-999.0","-9999.0"))
+
+# --- read and process sim data
+ncfl      <- nc_open(simFile)
+simTime   <- ncvar_get(ncfl, "time")
+simTunits <- ncatt_get(ncfl, "time", "units")
+simStDate <- strsplit(simTunits$value, " ")[[1]][3]
+simDate   <- as.POSIXct(simTime, origin=simStDate)
+simFlow   <- as.matrix(ncvar_get(ncfl, qVarname))
+
+# if there is only one flow segment, simFlow has dimensions [time,1], otherwise it is [nSegs,time]
+if(dim(simFlow)[2]!=1) {
+  simFlow <- as.matrix(t(simFlow)[,qSegIndex])       # transpose and reduce to one timeseries
+}
+
+if(obsUnit == 'cfs') {
+  simFlow = simFlow * 35.3147  # cms to cfs conversion
+}
+simDataZ  <- as.zoo(simFlow, as.Date(simDate))   # make sim data a zoo obj indexed on date (ie daily)
+
+# merge the two by timestamps, and cut out analysis window (hydroGOF expects sim, obs order for many functions)
+mergedObsSimZ <- merge(simDataZ, obsDataZ)
+statsDataZ    <- window(mergedObsSimZ, start=as.Date(statStartPer),
+                                         end=as.Date(statEndPer))
+
+# average to monthly (wow! so easy).  Not used (yet).
+monStatsDataZ <- aggregate(statsDataZ, format(index(statsDataZ), "%Y-%m"), FUN=mean)   
+
+# get long term monthly means (again wow!)
+monMeanStatsDataZ <- aggregate(statsDataZ, format(index(statsDataZ), "%m"), FUN=mean)
+
+# --- calculate stats ---
+kge    <- round( KGE(     statsDataZ[,1], statsDataZ[,2], na.rm=TRUE, method="2012"), 5)
+nse    <- round( NSE(     statsDataZ[,1], statsDataZ[,2], na.rm=TRUE), 5)
+mae    <- round( mae(     statsDataZ[,1], statsDataZ[,2], na.rm=TRUE), 5)
+pbias  <- round( pbias(   statsDataZ[,1], statsDataZ[,2], na.rm=TRUE), 5)
+corr   <- round( rPearson(statsDataZ[,1], statsDataZ[,2], na.rm=TRUE), 5)
+mmmErr <- abs(max(monMeanStatsDataZ[,1] - monMeanStatsDataZ[,2])) # max mon mean error
+
+# --- avoid defective KGE and corr caused by constant sflow (bad) ---
+if(is.na(kge)) {
+  kge = -99.00
+}
+if(is.na(corr)) {
+  corr = -99.00
+}
+
+# --- write out ---
+outstats <-  cbind( c(kge, nse, mae, pbias, corr, mmmErr),  
+                    c("#KGE", "#NSE", "#RMSE", "#PBIAS", "#CORR", "#MMMERR") )
+write.table(outstats, outStatsFile, quote=F, sep="\t",row.names=F,col.names=F)
+
+message("wrote ", outStatsFile)
+message("KGE NSE MAE pBias Corr mmmErr")
+message(paste(kge, nse, mae, pbias, corr, mmmErr, sep=" "))
