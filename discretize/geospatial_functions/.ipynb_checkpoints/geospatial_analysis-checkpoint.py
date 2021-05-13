@@ -197,6 +197,93 @@ def crop_raster(inraster,invector,outraster):
         outf.write(out_arr_ma)            
     return
 
+def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
+    # reference: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/how-slope-works.htm
+    # reference: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/how-aspect-works.htm
+
+    # read dem input
+    with rio.open(dem_raster) as ff:
+        dem  = ff.read(1)
+        mask = ff.read_masks(1)
+        out_meta = ff.meta.copy()
+        nodatavals = ff.nodatavals
+        pixelSizeX, pixelSizeY  = ff.res
+
+    # # calculate slope and aspect
+    slope = dem.copy()
+    aspect = dem.copy()
+    (nx,ny) = np.shape(dem)
+    # X is latitude, Y is longitude.
+
+    for i in range(nx): # latitude (north -> south)
+        for j in range(ny): # longitude (west -> east)
+            if (dem[i,j] != nodatavals):
+                # neighbor index
+                isouth = i+1
+                inorth = i-1
+                jwest = j-1
+                jeast = j+1
+
+                if (inorth < 0):
+                    inorth = 0
+                if (isouth > nx-1):
+                    isouth = nx-1
+                if (jwest < 0):
+                    jwest = 0
+                if (jeast > ny-1):
+                    jeast = ny-1
+
+                # neighbor elevation
+                #           North
+                #       ------------
+                #        a | b | c
+                #       ------------
+                # West   d | e | f    East
+                #       ------------
+                #        g | h | i
+                #       ------------
+                #           South
+                # 
+                dem_a = dem[inorth,jwest]
+                dem_b = dem[inorth,j]
+                dem_c = dem[inorth,jeast]
+                dem_d = dem[i,jwest]
+                dem_e = dem[i,j]
+                dem_f = dem[i,jeast]
+                dem_g = dem[isouth,jwest]
+                dem_h = dem[isouth,j]
+                dem_i = dem[isouth,jeast]
+
+                # dz/dx and dz/dy
+                dzdx = ((dem_c+2*dem_f+dem_i) - (dem_a+2*dem_d+dem_g))/(8*pixelSizeX)
+                dzdy = ((dem_g+2*dem_h+dem_i) - (dem_a+2*dem_b+dem_c))/(8*pixelSizeY)
+
+                # slope in rise_run (radian)
+                rise_run = (dzdx**2 + dzdy**2)**0.5            
+                # slope in degree [0, 90]
+                slope[i,j] = np.degrees(np.arctan(rise_run))
+
+                # aspect in [-180, 180]
+                aspect0 = np.degrees(np.arctan2(dzdy,-dzdx))
+                # convert to compass direction values (0-360 degrees)
+                if aspect0 < 0:
+                    cell = 90.0 - aspect0
+                elif aspect0 > 90.0:
+                    cell = 360.0 - aspect0 + 90.0
+                else:
+                    cell = 90.0 - aspect0
+                aspect[i,j] = cell
+
+    # save slope and aspect into raster
+    with rio.open(slope_raster, 'w', **out_meta) as outf:
+        slope_ma = np.ma.masked_array(slope, mask==0)
+        outf.write(slope_ma,1)       
+    with rio.open(aspect_raster, 'w', **out_meta) as outf:
+        aspect_ma = np.ma.masked_array(aspect, mask==0)
+        outf.write(aspect_ma,1)  
+    return
+
+
 def resample_raster(inraster,refraster,outraster):
     '''
     inraster: input, raster, rater to be cropped.
@@ -266,7 +353,7 @@ def resample_raster_scale(inraster,scale_factor,outraster,nodatavalue):
         return
     
     
-def classify_continuous_raster(inraster, bound_raster, classif_trigger, bins, class_outraster, value_outraster, nodatavalue):
+def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outraster, value_outraster, nodatavalue):
     '''
     bound_raster: input, raster, boundary as mask to classify inraster per boundary unit (eg, GRU raster).
     inraster: input, raster, continuous raster file.
@@ -298,7 +385,7 @@ def classify_continuous_raster(inraster, bound_raster, classif_trigger, bins, cl
     data_class = np.ones(np.shape(data), dtype=np.int32)*int(nodatavalue)
     data_value = np.ones(np.shape(data), dtype=np.float64)*int(nodatavalue)
 
-    # reclassify elevation 
+    # reclassify raster 
     # (1) if 'bins' is a string
     if isinstance(bins, str):
         bin_name = bins
@@ -307,7 +394,7 @@ def classify_continuous_raster(inraster, bound_raster, classif_trigger, bins, cl
             # loop through bounds
             for bound in unique_bounds:
                 smask = bounds == bound            
-                #Bin the elevation data based on the data median
+                # Bin the raster data based on the data median
                 smin,smedian,smax=np.min(data[smask]), np.median(data[smask]), np.max(data[smask])
                 # use smedian to do classification in two conditions: 
                 # when not given classif_trigger;
@@ -335,7 +422,7 @@ def classify_continuous_raster(inraster, bound_raster, classif_trigger, bins, cl
         # loop through bounds
         for bound in unique_bounds:
             smask = bounds == bound
-            #Bin the elevation data based on bins
+            # Bin the raster data based on bins
             (hist,bin_edges) = np.histogram(data[smask],bins=bins)
             #Place the mean elev and elev band
             for ibin in np.arange(len(bin_edges)-1):
@@ -363,10 +450,10 @@ def classify_continuous_raster(inraster, bound_raster, classif_trigger, bins, cl
         outf.write(data_value_ma, 1)
     return
 
-def classify_discrete_landcover(lc_raster, lc_class_raster, nodatavalue):
+def classify_landcover(lc_raster, lc_class_raster, nodatavalue):
     '''
     lc_raster: input, raster, landcover raster file.
-    lc_class_raster: output, raster, elevation class.
+    lc_class_raster: output, raster, raster class file.
     nodatavalue'''
     
     # read landcover data
@@ -396,7 +483,7 @@ def classify_discrete_landcover(lc_raster, lc_class_raster, nodatavalue):
         outf.write(lc_class_ma, 1)    
     return
 
-def classify_aspect(inraster, class_num, class_outraster, nodatavalue):
+def classify_aspect(aspect_raster, class_num, class_outraster):
     '''
     inraster: input, raster, continuous raster file.
     class_num: input, int, it defines the number of desired aspect classes. 
@@ -404,38 +491,45 @@ def classify_aspect(inraster, class_num, class_outraster, nodatavalue):
     value_outraster: output, raster, output raster of mean value per class. 
     nodatavalue'''
     
-    # read inraster data
-    with rio.open(inraster) as ff:
+    # read aspect_raster
+    with rio.open(aspect_raster) as ff:
         data  = ff.read(1)
-        data_mask = ff.read_masks(1)
+        mask = ff.read_masks(1)
+        nodatavals = ff.nodatavals
         out_meta = ff.meta.copy()
+    data_ma = np.ma.masked_array(data, mask==0)
 
     # define array in the same shape of data, and specify dtype!
-    data_class = np.ones(np.shape(data), dtype=np.int32)*int(nodatavalue)
+    data_class = data.copy()
 
     # reclassify aspect
     # reference: https://www.neonscience.org/resources/learning-hub/tutorials/classify-raster-thresholds-py
     if class_num == 4:
-        data_class[np.where((data>315) | (data<=45))] = 1  # north
-        data_class[np.where((data>45) & (data<=135))] = 2  # east
-        data_class[np.where((data>135) & (data<=225))] = 3 # south
-        data_class[np.where((data>225) & (data<=315))] = 4 # west
+        data_class[np.where((data_ma==0))] = 0                    # flat
+        data_class[np.where((data_ma>0) & (data_ma<=45))] = 1     # north
+        data_class[np.where((data_ma>45) & (data_ma<=135))] = 2   # east
+        data_class[np.where((data_ma>135) & (data_ma<=225))] = 3  # south
+        data_class[np.where((data_ma>225) & (data_ma<=315))] = 4  # west
+        data_class[np.where((data_ma>315) & (data_ma<=360))] = 1  # north
     elif class_num == 8:
-        data_class[np.where((data>337.5) | (data<=22.5))] = 1  # north
-        data_class[np.where((data>22.5) & (data<=67.5))] = 2   # northeast
-        data_class[np.where((data>67.5) & (data<=112.5))] = 3  # east
-        data_class[np.where((data>112.5) & (data<=157.5))] = 4 # southeast
-        data_class[np.where((data>157.5) & (data<=202.5))] = 5 # south
-        data_class[np.where((data>202.5) & (data<=247.5))] = 6 # southwest
-        data_class[np.where((data>247.5) & (data<=292.5))] = 7 # west
-        data_class[np.where((data>292.5) & (data<=337.5))] = 8 # northwest
-
-    # mask data_class and data_value
-    data_class_ma = np.ma.masked_array(data_class,data_mask==0)
-
-    # save data_class_ma into rasters
-    out_meta.update(count=1, dtype='int32', compress='lzw', nodata=nodatavalue)
+        data_class[np.where((data_ma==0))] = 0                       # flat
+        data_class[np.where((data_ma>0) & (data_ma<=22.5))] = 1      # north
+        data_class[np.where((data_ma>22.5) & (data_ma<=67.5))] = 2   # northeast
+        data_class[np.where((data_ma>67.5) & (data_ma<=112.5))] = 3  # east
+        data_class[np.where((data_ma>112.5) & (data_ma<=157.5))] = 4 # southeast
+        data_class[np.where((data_ma>157.5) & (data_ma<=202.5))] = 5 # south
+        data_class[np.where((data_ma>202.5) & (data_ma<=247.5))] = 6 # southwest
+        data_class[np.where((data_ma>247.5) & (data_ma<=292.5))] = 7 # west
+        data_class[np.where((data_ma>292.5) & (data_ma<=337.5))] = 8 # northwest
+        data_class[np.where((data_ma>337.5) & (data_ma<=360))] = 1   # north
+    
+    # convert class dtype from float to int
+    data_class = data_class.astype('int32') 
+    out_meta.update(count=1, dtype='int32', compress='lzw')
+    
+    # save data_class to raster
     with rio.open(class_outraster, 'w', **out_meta) as outf:
+        data_class_ma = np.ma.masked_array(data_class,mask=0)
         outf.write(data_class_ma, 1)    
     return
 

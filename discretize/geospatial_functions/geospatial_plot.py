@@ -424,22 +424,226 @@ def plot_discrete_raster(inraster,bound_vector,wgs_crs,cmap_str,input_dict,
 
     return
 
-    # reference: https://www.neonscience.org/resources/learning-hub/tutorials/classify-raster-thresholds-py
-#     import matplotlib.colors as colors
-#     plt.figure(); #ax = plt.subplots()
-#     cmapCHM = colors.ListedColormap(['lightblue','yellow','green','red'])
-#     plt.imshow(chm_reclass,extent=chm_ext,cmap=cmapCHM)
-#     plt.title('SERC CHM Classification')
-#     ax=plt.gca(); ax.ticklabel_format(useOffset=False, style='plain') #do not use scientific notation 
-#     rotatexlabels = plt.setp(ax.get_xticklabels(),rotation=90) #rotate x tick labels 90 degrees
-#     # forceAspect(ax,aspect=1) # ax.set_aspect('auto')
+def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
+                figsize,title,leg_loc,leg_bbox_to_anchor,leg_ncol,ofile):
+    '''inraster: input, raster to be plot.
+    wgs_crs: input string, projection system for plot (eg, 'epsg:4326').
+    cmap_str: input string, color map. Can be Python built-in colormap (eg, 'jet'), or 'user'.
+    input_dict: input dictionary. It's needed when cmap_str is 'user'. For each value of the raster, user needs to define its
+    corresponding color (for plot) and label (for legend)by following the format: dict[raster_value]=list(color,label). For example,
+    input_dict = {0:["black", "Flat (0)"],
+                 1:["red", "North (337.5 - 22.5)"],
+                 2:["orange", 'Northeast (22.5 - 67.5)'],
+                 3:["yellow", 'East (67.5 - 112.5)'], 
+                 4:["lime", 'Southeast (112.5 - 157.5)'], 
+                 5:["cyan", 'South (157.5 - 202.5)'], 
+                 6:["cornflowerblue", 'Southwest (202.5 - 247.5)'], 
+                 7:["blue", 'West (247.5 - 292.5)'], 
+                 8:["purple", 'Northwest (292.5 - 337.5)']}     
+    figsize: input, tuple, figure size (eg, (9,9*0.75)).
+    title: input, string, figure title.
+    leg_loc: input, int, number of legend columns. 
+    leg_bbox_to_anchor, legend location relative to 
+    leg_ncol: input, int, number of legend columns. 
+    ofile: output, output figure path.
+    '''
+    ## Part 1. pre-process raster data, color, legend
+    #  1. reproject raster by creating a VRT file, which is merely a ASCII txt file --- 
+    # that just contains reference to the referred file. This is useful to avoid duplicating raster files.
+    # reference: https://geohackweek.github.io/raster/04-workingwithrasters/
+    raster_vrt_file = os.path.join(os.path.dirname(inraster), 
+                                os.path.basename(inraster).split('.')[0]+'_vrt.tif')
+    with rio.open(inraster) as src:
+        with rio.vrt.WarpedVRT(src, crs=wgs_crs, resampling=rio.enums.Resampling.nearest) as vrt:
+            rio.shutil.copy(vrt, raster_vrt_file, driver='VRT')
 
-#     # Create custom legend to label the four canopy height classes:
-#     import matplotlib.patches as mpatches
-#     class1_box = mpatches.Patch(color='lightblue', label='CHM = 0m')
-#     class2_box = mpatches.Patch(color='yellow', label='0m < CHM < 20m')
-#     class3_box = mpatches.Patch(color='green', label='20m < CHM < 40m')
-#     class4_box = mpatches.Patch(color='red', label='CHM > 40m')
+    #  2. read the reprojected raster 
+    with rio.open(raster_vrt_file) as src:
+        data  = src.read(1)
+        mask = src.read_masks(1)
+        nodatavals = src.nodatavals
 
-#     ax.legend(handles=[class1_box,class2_box,class3_box,class4_box],
-#               handlelength=0.7,bbox_to_anchor=(1.05, 0.4),loc='lower left',borderaxespad=0.)
+    data_ma = np.ma.masked_array(data, mask==0)
+    data_unique,data_counts= np.unique(data[data!=nodatavals],return_counts=True) # unique values and counts
+
+    # 3. create colormap, norm and legend (two options)
+    # method 1. use user-specified cmap
+    if cmap_str!='user':
+        vals = np.arange(int(data_unique.max()+1))/float(data_unique.max())
+        colors =  mpl.cm.get_cmap(cmap_str)
+        cols = colors(vals)
+        cmap = mpl.colors.ListedColormap(cols, int(data_unique.max())+1)
+
+        legend_labels = {}
+        count_record = []
+        for data_i in data_unique:
+            data_i_color = cols[np.where(data_unique==data_i)][0]
+            data_i_label = input_dict[data_i]
+            legend_labels[data_i]=[data_i_color,data_i_label]
+            count_record.append([data_i,data_i_label,int(data_counts[data_unique==data_i])])
+
+    # method 2. use user-defined colors
+    elif cmap_str=='user':
+
+        legend_labels = {} # used to create legend
+        count_record = []  # usde to record class count
+        colors = []        # used to create cmap
+        for data_i in data_unique:
+            data_i_color = input_dict[data_i][0] 
+            data_i_label = input_dict[data_i][1]
+            legend_labels[data_i]=[data_i_color,data_i_label]
+            count_record.append([data_i,data_i_label,int(data_counts[data_unique==data_i])])
+            colors.append(data_i_color)
+        cmap = ListedColormap(colors, len(data_unique)) # generate your own cmap    
+
+    ## Part 2. plot
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+    fig.suptitle(title, weight='bold') 
+
+    # 2.1. plot raster using rasterio.plot.show in order to show coordinate
+    raster_image = rasterio.plot.show(data_ma,ax=ax,cmap=cmap,transform=src.transform)
+
+    # 2.2. plot legend
+    if cmap_str!='user':
+        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1][1]) for key in legend_labels]
+    else:
+        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
+
+    plt.legend(handles=patches, bbox_to_anchor=leg_bbox_to_anchor, loc=leg_loc, ncol=leg_ncol, fancybox=True)
+
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    fig.savefig(ofile, bbox_inches='tight',dpi=150)   
+    plt.show()
+
+    # 2.5. save count record to txt --- 
+    count_ofile = os.path.join(os.path.dirname(ofile), os.path.basename(ofile).split('.')[0]+'.txt')
+    count_sum = np.sum(data_counts)
+    with open(count_ofile,'w') as f:
+        f.write('#RasterValue,Label,Count,Proportion\n')
+        for i in range(len(count_record)):
+            f.write('%d,%s,%d,%.4f\n'%(count_record[i][0],count_record[i][1],count_record[i][2],
+                                       count_record[i][2]/float(count_sum)))  
+    return
+
+def plot_raster_and_bound_stream(inraster,bound_vector,stream_vector,wgs_crs,cmap_str,input_dict,
+                                 figsize,title,leg_loc,leg_bbox_to_anchor,leg_ncol,ofile):
+    '''inraster: input, raster to be plot.
+    bound_vector: input, vector with basin bound.
+    stream_vector: input, vector of basin streamline.
+    wgs_crs: input string, projection system for plot (eg, 'epsg:4326').
+    cmap_str: input string, color map. Can be Python built-in colormap (eg, 'jet'), or 'user'.
+    input_dict: input dictionary. It's needed when cmap_str is 'user'. For each value of the raster, user needs to define its
+    corresponding color (for plot) and label (for legend). For example,
+    input_dict = {0:["black", "Flat (0)"],
+                 1:["red", "North (337.5 - 22.5)"],
+                 2:["orange", 'Northeast (22.5 - 67.5)'],
+                 3:["yellow", 'East (67.5 - 112.5)'], 
+                 4:["lime", 'Southeast (112.5 - 157.5)'], 
+                 5:["cyan", 'South (157.5 - 202.5)'], 
+                 6:["cornflowerblue", 'Southwest (202.5 - 247.5)'], 
+                 7:["blue", 'West (247.5 - 292.5)'], 
+                 8:["purple", 'Northwest (292.5 - 337.5)']}     
+    figsize: input, tuple, figure size (eg, (9,9*0.75)).
+    title: input, string, figure title.
+    leg_loc: input, int, number of legend columns. 
+    leg_bbox_to_anchor, legend location relative to 
+    leg_ncol: input, int, number of legend columns. 
+    ofile: output, output figure path.
+    '''
+    ## Part 1. pre-process raster data, color, legend
+    #  1. reproject raster by creating a VRT file, which is merely a ASCII txt file --- 
+    # that just contains reference to the referred file. This is useful to avoid duplicating raster files.
+    # reference: https://geohackweek.github.io/raster/04-workingwithrasters/
+    raster_vrt_file = os.path.join(os.path.dirname(inraster), 
+                                os.path.basename(inraster).split('.')[0]+'_vrt.tif')
+    with rio.open(inraster) as src:
+        with rio.vrt.WarpedVRT(src, crs=wgs_crs, resampling=rio.enums.Resampling.nearest) as vrt:
+            rio.shutil.copy(vrt, raster_vrt_file, driver='VRT')
+
+    #  2. read the reprojected raster 
+    with rio.open(raster_vrt_file) as src:
+        data  = src.read(1)
+        mask = src.read_masks(1)
+        nodatavals = src.nodatavals
+
+    data_ma = np.ma.masked_array(data, mask==0)
+    data_unique,data_counts= np.unique(data[data!=nodatavals],return_counts=True) # unique values and counts
+
+    # 3. create colormap, norm and legend (two options)
+    # method 1. use user-specified cmap
+    if cmap_str!='user':
+        vals = np.arange(int(data_unique.max()+1))/float(data_unique.max())
+        colors =  mpl.cm.get_cmap(cmap_str)
+        cols = colors(vals)
+        cmap = mpl.colors.ListedColormap(cols, int(data_unique.max())+1)
+
+        legend_labels = {}
+        count_record = []
+        for data_i in data_unique:
+            data_i_color = cols[np.where(data_unique==data_i)][0]
+            data_i_label = input_dict[data_i]
+            legend_labels[data_i]=[data_i_color,data_i_label]
+            count_record.append([data_i,data_i_label,int(data_counts[data_unique==data_i])])
+
+    # method 2. use user-defined colors
+    elif cmap_str=='user':
+
+        legend_labels = {} # used to create legend
+        count_record = []  # usde to record class count
+        colors = []        # used to create cmap
+        for data_i in data_unique:
+            data_i_color = input_dict[data_i][0] #cols[np.where(unique==data_i)]
+            data_i_label = input_dict[data_i][1]
+            legend_labels[data_i]=[data_i_color,data_i_label]
+            count_record.append([data_i,data_i_label,int(data_counts[data_unique==data_i])])
+            colors.append(data_i_color)
+        cmap = ListedColormap(colors, len(data_unique)) # Define the colors you want based on raster values    
+
+    ## Part 2. plot
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+    fig.suptitle(title, weight='bold') 
+
+    # 2.1. plot raster using rasterio.plot.show in order to show coordinate
+    raster_image = rasterio.plot.show(data_ma,ax=ax,cmap=cmap,transform=src.transform)
+
+    # 2.2. plot basin boundary
+    bound_gpd = gpd.read_file(bound_vector)
+    bound_gpd_prj = bound_gpd.to_crs(wgs_crs)
+    bound_gpd_prj['new_column'] = 0
+    gpd_new = bound_gpd_prj.dissolve(by='new_column')
+    gpd_new.boundary.plot(color=None,edgecolor='k',linewidth=1,ax=ax) 
+
+    # 2.3. plot streamline
+    stream_gpd = gpd.read_file(stream_vector)
+    stream_gpd_prj = stream_gpd.to_crs(wgs_crs)
+    stream_gpd_prj.plot(color='darkblue', linewidth=1.5, ax=ax)
+
+    # 2.3. plot legend
+    if cmap_str!='user':
+        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1][1]) for key in legend_labels]
+    else:
+        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
+
+    basin_bound = mpl.patches.Patch(edgecolor='black', linewidth=1, fill=False, label='Basin')
+    patches.append(basin_bound)
+
+    stream_line = mpl.lines.Line2D([], [], color='darkblue', linewidth=1.5, marker=None, label='Streamline')
+    patches.append(stream_line)
+
+    plt.legend(handles=patches, bbox_to_anchor=leg_bbox_to_anchor, loc=leg_loc, ncol=leg_ncol, fancybox=True)
+
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    fig.savefig(ofile, bbox_inches='tight',dpi=150)   
+    plt.show()
+
+    # 2.5. save count record to txt --- 
+    count_ofile = os.path.join(os.path.dirname(ofile), os.path.basename(ofile).split('.')[0]+'.txt')
+    count_sum = np.sum(data_counts)
+    with open(count_ofile,'w') as f:
+        f.write('#RasterValue,Label,Count,Proportion\n')
+        for i in range(len(count_record)):
+            f.write('%d,%s,%d,%.4f\n'%(count_record[i][0],count_record[i][1],count_record[i][2],
+                                       count_record[i][2]/float(count_sum)))  
+    return

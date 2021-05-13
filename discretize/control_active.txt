@@ -6,22 +6,22 @@
 # If deviating from default paths, a full path must be specified. E.g. '/home/user/non-default/path'
 
 ## ---- PART 1. Modeling domain settings ---- 
-root_path              | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize              # root path where data will be stored.
-source_path            | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data  # path where projected large-domain data are stored.
+root_path              | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize              # root path where data will be stored.
+source_path            | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data  # path where projected large-domain data are stored.
 domain_name            | shoshone   # use as the domain folder name for the prepared data.
 
 ## ---- PART 2. Large-domain input data settings (used for crop) ----
-dem_raster             | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data/MERIT_Hydro_dem_NLDAS.tif  
-landcover_raster       | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data/nldas_landcover.tif  
-soil_raster            | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data/usda_mode_soilclass_vCompressed_NA_250m_ll.tif  
-stream_shp             | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data/riv_pfaf_7_MERIT_westUS/riv_pfaf_7_MERIT_Hydro_v07_Basins_v01_wUS.shp 
+dem_raster             | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/MERIT_Hydro_dem_NLDAS.tif  
+landcover_raster       | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/nldas_landcover.tif  
+soil_raster            | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/usda_mode_soilclass_vCompressed_NA_250m_ll.tif  
+stream_shp             | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/riv_pfaf_7_MERIT_Hydro_v07_Basins_v01_wUS.shp 
 
 dem_nodatavalue        | -9999 # noData value obtained by checking dem_raster.
 landcover_nodatavalue  | 255   # noData value obtained by checking landcover raster.
 soil_nodatavalue       | None  # noData value obtained by checking soil raster.
 
 ## ---- PART 3.  Catchment shapefile settings (optional, required when domain_gru_shp is extracted from large-domain huc12_shp.) ---- 
-huc12_shp              | /glade/u/home/hongli/scratch/2020_06_02HRUcomplexity/discretize/source_data/west_huc12/WEST.huc12.shp  # large-domain HUC12 shapefile. 
+huc12_shp              | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/west_huc12/WEST.huc12.shp  # large-domain HUC12 shapefile. 
 huc12_field            | HUC12                      # field name of the HUC12 column.    
 Tohuc12_field          | ToHUC                      # field name of the downstream HUC12 column.
 outlet_hucid           | 100800120304               # HUC12 where the domain basin outlet is located.

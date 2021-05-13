@@ -15,14 +15,6 @@ When read mask use ff.read_masks(1), it by default returns mask in the first for
 
 import os
 
-# Function to find the unique items of a list
-def unique(list1):
-    list_uniqe = []
-    for x in list1:
-        if not x in list_uniqe:
-            list_uniqe.append(x)
-    return list_uniqe
-
 # Function to extract a given setting from the configuration file
 def read_from_control(control_file, setting):
     
