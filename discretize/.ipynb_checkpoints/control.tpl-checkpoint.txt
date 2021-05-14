@@ -39,7 +39,7 @@ hruName_field          | hruId                      # field name of the hru name
 hruArea_field          | areaSqm                    # field name of the hru area column, used in small HRU elimination
 
 ## ---- PART 5. Projection and nodata value in data processing ----
-proj4                  | +proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs # Albers Equal Area Conic Projection. Find from https://epsg.io/.
+proj4                  | +proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs # Albers Equal Area Conic Projection. String that PROJ uses to describe coordinate systems and transformations. Find from https://epsg.io/.
 nodatavalue            | -9999                      # used in all the raster outputs.
 
 ## ---- PART 6. HRU elimination threshold (two options: value, fraction) ----
@@ -69,6 +69,7 @@ domain_stream_shp                | default         # domain stream shapefile pat
 
 domain_landcover_raster          | default          # domain landcover raster path. If 'default', use 'root_path/[domain_name]/landcover.tif'.
 domain_landcover_resample_raster | default          # domain landcover resample raster path, resampled according to the resolution of refraster. 
+domain_landcover_class_raster    | default          # domain landcover class raster path. If 'default', use 'root_path/[domain_name]/landcover_class.tif'.
                                                     # If 'default', use 'root_path/[domain_name]/landcover_crop_resample.tif.
 domain_landcover_class_raster    | default          # domain landcover class raster path (eg, 1: canopy, 2: non-canopy). 
                                                     # If 'default', use 'root_path/[domain_name]/landcover_class.tif'.

@@ -214,6 +214,17 @@ def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
     aspect = dem.copy()
     (nx,ny) = np.shape(dem)
     # X is latitude, Y is longitude.
+    #                             j(ny)
+    #     |------------------------->
+    #     |            North
+    #     |        ------------
+    #     |         a | b | c
+    #     |        ------------
+    #     |  West   d | e | f    East
+    #     |        ------------
+    #     |         g | h | i
+    #  i  |        ------------
+    # (nx)↓           South
 
     for i in range(nx): # latitude (north -> south)
         for j in range(ny): # longitude (west -> east)
@@ -233,17 +244,7 @@ def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
                 if (jeast > ny-1):
                     jeast = ny-1
 
-                # neighbor elevation
-                #           North
-                #       ------------
-                #        a | b | c
-                #       ------------
-                # West   d | e | f    East
-                #       ------------
-                #        g | h | i
-                #       ------------
-                #           South
-                # 
+                # neighbor elevation            
                 dem_a = dem[inorth,jwest]
                 dem_b = dem[inorth,j]
                 dem_c = dem[inorth,jeast]
