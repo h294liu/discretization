@@ -18,10 +18,6 @@ landcover_raster       | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/
 soil_raster            | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/usda_mode_soilclass_vCompressed_NA_250m_ll.tif  
 stream_shp             | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/riv_pfaf_7_MERIT_Hydro_v07_Basins_v01_wUS.shp 
 
-dem_nodatavalue        | -9999 # noData value obtained by checking dem_raster.
-landcover_nodatavalue  | 255   # noData value obtained by checking landcover raster.
-soil_nodatavalue       | None  # noData value obtained by checking soil raster.
-
 ## ---- PART 3.  Catchment shapefile settings (optional, required when domain_gru_shp is extracted from large-domain huc12_shp.) ---- 
 huc12_shp              | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/west_huc12/WEST.huc12.shp  # large-domain HUC12 shapefile. 
 huc12_field            | HUC12                      # field name of the HUC12 column.    
@@ -42,7 +38,6 @@ hruArea_field          | areaSqm                    # field name of the hru area
 
 ## ---- PART 5. Projection and nodata value in data processing ----
 proj4                  | +proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs # Albers Equal Area Conic Projection. String that PROJ uses to describe coordinate systems and transformations. Find from https://epsg.io/.
-nodatavalue            | -9999                      # used in all the raster outputs.
 
 ## ---- PART 6. HRU elimination threshold (two options: value, fraction) ----
 # hru_thld_type        | value                      # use a constant area to eliminate small HRUs.
@@ -77,3 +72,5 @@ domain_landcover_class_raster    | default          # domain landcover class ras
                                                     # If 'default', use 'root_path/[domain_name]/landcover_class.tif'.
 
 refraster                        | default          # reference raster path, used in vector rasterization and resample. If 'default', uses 'domain_dem_raster'.
+
+elev_field            | elevClass                      # field name of the elevation class column in HRU. 

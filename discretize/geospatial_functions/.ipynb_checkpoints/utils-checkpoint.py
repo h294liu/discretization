@@ -5,34 +5,9 @@
 Created on Fri Oct 16 09:35:11 2020
 
 @author: hongli
-
-Note: in python, there are two types of nodata mask for raster files.
-The first is in the format of GDAL. 0 is invalid region, 255 is valid region. 
-The second is in the foramt of Numpy masked array. True is invalid region, False is valid region.
-When read mask use ff.read_masks(1), it by default returns mask in the first format.
-(reference: https://rasterio.readthedocs.io/en/latest/topics/masks.html)
 """
 
 import os
-
-# # Function to extract a given setting from the configuration file
-# def read_from_control(control_file, setting):
-    
-#     # Open 'control_active.txt' and ...
-#     with open(control_file) as contents:
-#         for line in contents:
-            
-#             # ... find the line with the requested setting
-#             if (setting in line) and (not line.startswith('#')):
-#                 break
-    
-#     # Extract the setting's value
-#     substring = line.split('|',1)[1]      # Remove the setting's name (split into 2 based on '|', keep only 2nd part)
-#     substring = substring.split('#',1)[0] # Remove comments, does nothing if no '#' is found
-#     substring = substring.strip()         # Remove leading and trailing whitespace, tabs, newlines
-       
-#     # Return this value    
-#     return substring
 
 # Function to extract a given setting from the configuration file
 def read_from_control(control_file, setting):

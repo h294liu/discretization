@@ -25,12 +25,16 @@ from scipy import stats
 from tqdm import tqdm
 import matplotlib.pyplot as plt 
 
-
 def reproject_raster(inraster, outraster, dst_crs, resampling_method):
-# reference: https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/reproject-raster/        
-# resampling_method must be one of the followings:
-#Resampling.nearest, Resampling.bilinear, Resampling.cubic, Resampling.cubic_spline, Resampling.lanczos, Resampling.average, Resampling.mode, Resampling.max (GDAL >= 2.2), Resampling.min (GDAL >= 2.2), Resampling.med (GDAL >= 2.2), Resampling.q1 (GDAL >= 2.2), Resampling.q3 (GDAL >= 2.2)
-# reference: https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html
+    '''inraster: input, raster, the raster to be re-projected.
+    outraster: output, raster, path of output raster.
+    dst_crs: input, proj, destinate/output crs. 
+    resampling_method: input, rasterio.warp.Resampling method. 
+    # resampling_method must be one of the followings:
+    # Resampling.nearest, Resampling.bilinear, Resampling.cubic, Resampling.cubic_spline, Resampling.lanczos, Resampling.average, Resampling.mode, 
+    # Resampling.max (GDAL >= 2.2), Resampling.min (GDAL >= 2.2), Resampling.med (GDAL >= 2.2), Resampling.q1 (GDAL >= 2.2), Resampling.q3 (GDAL >= 2.2)
+    # reference: https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/reproject-raster/  
+    # reference: https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html'''
 
     with rio.open(inraster) as src:
         transform, width, height = calculate_default_transform(
@@ -55,33 +59,15 @@ def reproject_raster(inraster, outraster, dst_crs, resampling_method):
                     resampling=resampling_method)
     return
                 
-def reproject_vector(invector, outvector, new_crs):
+def reproject_vector(invector, outvector, dst_crs):
+    '''invector: input, vector, the vector to be re-projected.
+    outvector: output, vector, path of output vector.
+    dst_crs: input, proj, output crs. '''
     # reference:https://www.earthdatascience.org/courses/use-data-open-source-python/intro-vector-data-python/vector-data-processing/reproject-vector-data-in-python/
     in_gdf = gpd.read_file(invector)            # read vector file
-    in_gdf_prj = in_gdf.to_crs(new_crs)         # convert projection   
+    in_gdf_prj = in_gdf.to_crs(dst_crs)         # convert projection   
     in_gdf_prj.to_file(outvector)               # save projected geodataframe
     return 
-
-def buffer_vector(invector, outvector, buf_dist):
-    # reference: https://stackoverflow.com/questions/51263138/how-to-create-an-accurate-buffer-of-5-miles-around-a-coordinate-in-python
-    in_gdf = gpd.read_file(invector)                       # read vector file
-    in_gdf['geometry'] = in_gdf.geometry.buffer(buf_dist)  # buffer (unit:meter)
-    in_gdf.to_file(outvector)                              # save geodataframe    
-    return 
-
-def convert_aspect_180(in_aspect_raster, out_aspect_raster):
-    # read dem file
-    with rio.open(in_aspect_raster) as ff:
-        asp  = ff.read(1)
-        asp_mask = ff.read_masks(1)
-        out_meta = ff.meta.copy()
-    # convert
-    asp = np.where(asp>180, 360-asp, asp)
-    # save
-    with rio.open(out_aspect_raster, 'w', **out_meta) as outf:
-        out_arr_ma = np.ma.masked_array(asp, asp_mask==0)
-        outf.write(out_arr_ma,1)       
-    return
     
 def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_dtype,refraster,outraster,gru_corr_txt):
     # reference: https://gis.stackexchange.com/questions/151339/rasterize-a-shapefile-with-geopandas-or-fiona-python
@@ -89,8 +75,8 @@ def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_
     invector: input, vector, the vector to be rasterized.
     infield: input, str, attribute field of input vector that is used as a burn-in value.
     gruName_field: input, str, gru name field, add to the updated invector.
-    gruNo_field: input, str, gru number field, add to the updated invector.
-    gruNo_field_dtype: input, str, data type of gruNo_field, used to specify dtype of output raster.
+    gruNo_field: input, str, field name of the gru number column, e.g.,1,2,3....
+    gruNo_field_dtype: input, str, data type of gruNo_field, used to specify dtype of output gru raster.
     refraster: input, raster, reference raster to get meta. 
     outraster: output, raster, path of output raster.
     gru_corr_txt: output, txt, gruNo-gruName correspondence relationship.    '''
@@ -139,7 +125,8 @@ def rasterize_vector(invector,infield,infield_dtype,refraster,outraster):
     '''
     invector: input, vector, the vector to be rasterized.
     infield: input, string. field of input vector to use as a burn-in value.
-    infield_dtype: input, string. data type of infield, used to rasterize invector. Avaialble dtypes for rasterio: 'int16', 'int32', 'float32', 'float64'(reference: https://test2.biogeo.ucdavis.edu/rasterio/_modules/rasterio/dtypes.html)
+    infield_dtype: input, string. data type of infield, used to rasterize invector.
+    Note: Avaialble dtypes for rasterio: 'int16', 'int32', 'float32', 'float64'(reference: https://test2.biogeo.ucdavis.edu/rasterio/_modules/rasterio/dtypes.html)
     refraster: input, raster, reference raster to get meta. 
     outraster: output, raster, path of output raster.    '''
     
@@ -198,6 +185,9 @@ def crop_raster(inraster,invector,outraster):
     return
 
 def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
+    '''dem_raster: input, DEM raster.
+    slope_raster: output, slope raster.
+    aspect_raster: output, aspect raster.'''
     # reference: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/how-slope-works.htm
     # reference: https://desktop.arcgis.com/en/arcmap/10.3/tools/spatial-analyst-toolbox/how-aspect-works.htm
 
@@ -275,8 +265,8 @@ def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
                     cell = 90.0 - aspect0
                 aspect[i,j] = cell
     
-    # let aspect = -1 for flat grids (slope=0).
-    aspect[slope==0.0] = -1
+    # let aspect = 0 for flat grids (slope=0).
+    aspect[slope==0.0] = 0
     
     # save slope and aspect into raster
     with rio.open(slope_raster, 'w', **out_meta) as outf:
@@ -330,7 +320,8 @@ def resample_raster(inraster,refraster,outraster):
     return
 
 def resample_raster_scale(inraster,scale_factor,outraster):
-    # This function is used when the scale_factor is provided by users. The function has not been used in this project yet, but it's put here in case it can be used later.
+    # This function is used when the scale_factor is provided by users. 
+    # The function has not been used in this project yet, but it's put here in case it can be used later.
     with rio.open(inraster) as dataset:
 
         # resample data to target shape
@@ -565,12 +556,14 @@ def polygonize_raster(inraster, outvector, attrb_field, attrb_field_dtype):
             dst.writerecords(results)      
     return
 
-def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gruNo_field, gruName_field,
+# Create HRU by overlaying a list of provided input rasters.
+def define_hru(raster_list, fieldname_list, gru_raster, gru_corr_txt, gruNo_field, gruName_field,
                outraster, outvector, hruNo_field, hruNo_field_dtype, hruName_field):
     '''
     raster_list: input, list, a list raster inputs that are used to define HRU.
-    raster_fieldname_list: input, str, a list of field names corresponding to raster_list.
+    fieldname_list: input, str, a list of field names corresponding to raster_list.
     gru_raster: input, raster, gru input raster.
+    gruNo_field: input, string, field name of the gru number column, e.g.,1,2,3... 
     gru_corr_txt: input, text, gruNo-HUC12 correspondence txt file.
     outraster: output, raster, HRU raster with integer value.
     outvector: output, raster, HRU vector with HRU_full and HRU_int fields. '''
@@ -649,7 +642,7 @@ def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gru
         if irow == 0:
             hru_gpd_disv[hruName_field] = ""    # simplified HRU name, e.g., hruNo + HRU#.
             hru_gpd_disv[gruName_field] = ""    # HUC12 int
-            for jfield, field in enumerate(raster_fieldname_list): # other fields
+            for jfield, field in enumerate(fieldname_list): # other fields
                 hru_gpd_disv[field] = ""          
             hru_num_per_gru = 0           # count the number of HRUs per gru
             gruNo_before = ''             # gruNo before this irow to update hru_num_per_gru
@@ -672,7 +665,7 @@ def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gru
         hru_gpd_disv.loc[irow,gruName_field] = str(gruName) 
 
         # (e) fill other fields for class checks 
-        for jfield, field in enumerate(raster_fieldname_list):
+        for jfield, field in enumerate(fieldname_list):
             field_str_start = sum(raster_str_max_len_list[0:jfield])
             field_str_len = raster_str_max_len_list[jfield]
             hru_gpd_disv.at[irow,field] = int(hru_str[field_str_start:field_str_start+field_str_len])          
@@ -680,15 +673,31 @@ def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gru
     # change dtypes of name and class fields to be int64
     hru_gpd_disv[hruName_field] = pd.to_numeric(hru_gpd_disv[hruName_field], errors='coerce')
     hru_gpd_disv[gruName_field] = pd.to_numeric(hru_gpd_disv[gruName_field], errors='coerce')
-    for field in raster_fieldname_list:   
+    for field in fieldname_list:   
         hru_gpd_disv[field] = pd.to_numeric(hru_gpd_disv[field], errors='coerce')
         
     # save gpd to shapefile
     hru_gpd_disv.to_file(outvector, index=False)
     return
 
-def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruName_field, hruNo_field, hruNo_field_dtype, hruName_field, hruArea_field, raster_fieldname_list, refraster, hru_vector_disv, hru_raster_disv):
-    # method 1. replace small HRU attibutes with the most dominant HRU's
+# Eliminate small HRUs by merging with the most dominant HRU within the same GRU.
+def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruName_field, 
+                                  hruNo_field, hruNo_field_dtype, hruName_field, hruArea_field, 
+                                  fieldname_list, refraster, hru_vector_disv, hru_raster_disv):
+    '''
+    hru_vector: input, HRU shapefile.
+    hru_area_thld: input, number, small HRU area threthold below which the HRU will be merged with another HRU.
+    gruNo_field: input, string, field name of the gru number column, e.g.,1,2,3... 
+    gruName_field: input, string, field name of gru name, e.g., 100800120101. 
+    hruNo_field: input, string, field name of the hru number column, e.g.,1,2,3...
+    hruNo_field_dtype: input, string, data type of hruNo_field, used to save hru raster.
+    hruName_field: input, string, field name of the hru name column, e.g., 10080012010101, 100800120102. 
+    hruArea_field: input, string, field name of the HRU area, used in small HRU elimination.
+    fieldname_list: input, string list, a list of filed names used in hru generation.
+    refraster: input, raster, a reference raster to get meta when rasterizing outvector.
+    outraster: output, raster, HRU raster with integer value.
+    outvector: output, raster, HRU vector with HRU_full and HRU_int fields. '''
+
     in_gpd = gpd.read_file(hru_vector)
     in_gpd_disv = in_gpd.copy()
 
@@ -702,7 +711,7 @@ def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruNam
         flt2 = (in_gpd_disv[hruArea_field]<=hru_area_thld)     # filter 2: HRU area    
         flt = (flt1 & flt2)
         # change attributes to the most dominant one's
-        for field in raster_fieldname_list:
+        for field in fieldname_list:
             in_gpd_disv.at[flt,field]=in_gpd_disv.loc[max_index,field]
         in_gpd_disv.at[flt,hruName_field]=in_gpd_disv.loc[max_index,hruName_field]
         pbar.update(1)
@@ -729,7 +738,7 @@ def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruNam
     # change dtypes of No, Name and class fields to be int64
     for field in [hruNo_field,gruNo_field,hruName_field,gruName_field]:   
         in_gpd_disv[field] = pd.to_numeric(in_gpd_disv[field], errors='coerce')
-    for field in raster_fieldname_list:   
+    for field in fieldname_list:   
         in_gpd_disv[field] = pd.to_numeric(in_gpd_disv[field], errors='coerce')
 
     # drop index column
@@ -741,12 +750,24 @@ def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruNam
     rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv)
     return
 
+# Eliminate small HRUs by merging with the largest neighbor HRU within the same GRU.
 def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_field, gruName_field, 
-                                  hruNo_field, hruNo_field_dtype, hruName_field, 
-                                  hruArea_field, raster_fieldname_list, refraster, hru_vector_disv, 
-                                  hru_raster_disv):
+                                  hruNo_field, hruNo_field_dtype, hruName_field,hruArea_field, 
+                                  fieldname_list, refraster, hru_vector_disv, hru_raster_disv):
+    '''
+    hru_vector: input, HRU shapefile.
+    hru_area_thld: input, number, small HRU area threthold below which the HRU will be merged with another HRU.
+    gruNo_field: input, string, field name of the gru number column, e.g.,1,2,3... 
+    gruName_field: input, string, field name of gru name, e.g., 100800120101. 
+    hruNo_field: input, string, field name of the hru number column, e.g.,1,2,3...
+    hruNo_field_dtype: input, string, data type of hruNo_field, used to save hru raster.
+    hruName_field: input, string, field name of the hru name column, e.g., 10080012010101, 100800120102. 
+    hruArea_field: input, string, field name of the HRU area, used in small HRU elimination.
+    fieldname_list: input, string list, a list of filed names used in hru generation.
+    refraster: input, raster, a reference raster used to rasterize outvector.
+    outraster: output, raster, HRU raster with integer value.
+    outvector: output, raster, HRU vector with HRU_full and HRU_int fields. '''
 
-    # method 2: change HRU attribute to its' largest neighbor's HRU
     in_gpd = gpd.read_file(hru_vector)
     in_gpd_disv = in_gpd.copy()
     in_gpd_disv = in_gpd_disv.to_crs(in_gpd.crs)  # convert projection   
@@ -786,13 +807,13 @@ def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_fie
                 if len(nbhds_idx)>0:
                     # when there are neightbors, take the attribute of the largest neighboring HRU.
                     larg_nbhd_idx= gru_df.loc[nbhds_idx,hruArea_field].idxmax()
-                    for field in raster_fieldname_list:
+                    for field in fieldname_list:
                         in_gpd_disv.at[in_gpd_disv[hruName_field]==target_hruName,field]=gru_df.loc[larg_nbhd_idx,field]
                     in_gpd_disv.at[in_gpd_disv[hruName_field]==target_hruName,hruName_field] = gru_df.loc[larg_nbhd_idx,hruName_field] 
                 else:
                     # when there is no neightbor, take the attribute of the most dominant HRU within the gru. 
                     print('no neighbors')
-                    for field in raster_fieldname_list:
+                    for field in fieldname_list:
                         in_gpd_disv.at[in_gpd_disv[hruName_field]==target_hruName,field]=gru_df.loc[dom_hru_idx,field]
                     in_gpd_disv.at[in_gpd_disv[hruName_field]==target_hruName,hruName_field] = dom_hru 
 
@@ -833,7 +854,7 @@ def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_fie
     # change dtypes of No, Name and class fields to be int64
     for field in [hruNo_field,gruNo_field,hruName_field,gruName_field]:   
         in_gpd_disv[field] = pd.to_numeric(in_gpd_disv[field], errors='coerce')
-    for field in raster_fieldname_list:   
+    for field in fieldname_list:   
         in_gpd_disv[field] = pd.to_numeric(in_gpd_disv[field], errors='coerce')
 
     if 'index' in in_gpd_disv.columns:
@@ -844,6 +865,7 @@ def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_fie
     rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv)
     return
 
+# Calculate zonal statistics for a given input vector and raster attribute.
 def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, metric, out_raster, *args, **kwargs):
     '''
     attr_raster: input, raster. Raster to analyze.
@@ -915,7 +937,7 @@ def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, me
                 # Method: decompose the aspect angle into a 2D vector using sin and cos, average the vectors, and then recompose them into an angle with arctan2.
                 # Note: arctan is the 2-quadrant inverse tangent, it takes only one input value x/y. Its result is in [-90,90].
                 # Note: arctan2 is the 4-quadrant inverse tangent, it takes two input arguments x and y. Its result is in [-180,180].
-                attr_smask = np.where(attr_smask==0.0,np.nan,attr_smask) # exclude flat grids (flat aspect=-1)
+                attr_smask = np.where(attr_smask==0.0,np.nan,attr_smask) # exclude flat grids (flat aspect=0)
                 
                 y = np.sin(np.radians(attr_smask)) # north/south vector (positive to N)
                 x = np.cos(np.radians(attr_smask)) # west/east vector (positive to E)
