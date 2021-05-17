@@ -34,7 +34,6 @@ gruName_field          | gruId                      # field name of gru name, e.
 hruNo_field            | hruNo                      # field name of the hru number column, e.g.,1,2,3...
 hruNo_field_dtype      | int32                      # used to save the hru raster. 
 hruName_field          | hruId                      # field name of the hru name column, e.g., 10080012010101, 100800120102. 
-hruArea_field          | areaSqm                    # field name of the hru area column, used in small HRU elimination
 
 ## ---- PART 5. Projection and nodata value in data processing ----
 proj4                  | +proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs # Albers Equal Area Conic Projection. String that PROJ uses to describe coordinate systems and transformations. Find from https://epsg.io/.
@@ -73,4 +72,7 @@ domain_landcover_class_raster    | default          # domain landcover class ras
 
 refraster                        | default          # reference raster path, used in vector rasterization and resample. If 'default', uses 'domain_dem_raster'.
 
-elev_field            | elevClass                      # field name of the elevation class column in HRU. 
+elev_class_field                 | elevClass        # field name of the elevation class column in HRU. 
+land_class_field                 | lcClass          # field name of the land class column in HRU. 
+radiation_class_field            | radClass         # field name of the radiation class column in HRU.
+hru_area_field                   | areaSqm          # field name of the HRU area, used in small HRU elimination.
