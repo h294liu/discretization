@@ -429,8 +429,8 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
     '''inraster: input, raster to be plot.
     wgs_crs: input string, projection system for plot (eg, 'epsg:4326').
     cmap_str: input string, color map. Can be Python built-in colormap (eg, 'jet'), or 'user'.
-    input_dict: input dictionary. It's needed when cmap_str is 'user'. For each value of the raster, user needs to define its
-    corresponding color (for plot) and label (for legend)by following the format: dict[raster_value]=list(color,label). For example,
+    input_dict: input dictionary. When cmap_str is 'user', user needs to define each raster value corresponding 
+    color (for plot) and label (for legend) following the format: dict[raster_value]=list(color,label). For example, for aspect:
     input_dict = {0:["black", "Flat (0)"],
                  1:["red", "North (337.5 - 22.5)"],
                  2:["orange", 'Northeast (22.5 - 67.5)'],
@@ -440,6 +440,21 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
                  6:["cornflowerblue", 'Southwest (202.5 - 247.5)'], 
                  7:["blue", 'West (247.5 - 292.5)'], 
                  8:["purple", 'Northwest (292.5 - 337.5)']}     
+    When cmap_str is a Python built-in colormap (eg, 'jet'), user needs to define each raster corresponding label (for legend)
+    following the format: dict[raster_value]=label. For example,for soil,
+    input_dict = {0: "NoData",
+                1: 'CLAY',
+                2: 'CLAY LOAM',
+                3: 'LOAM',
+                4: 'LOAMY SAND',
+                5: 'SAND',
+                6: 'SANDY CLAY',
+                7: 'SANDY CLAY LOAM',
+                8: 'SANDY LOAM',
+                9: 'SILT',
+                10: 'SILTY CLAY',
+                11: 'SILTY CLAY LOAM',
+                12: 'SILT LOAM'}   
     figsize: input, tuple, figure size (eg, (9,9*0.75)).
     title: input, string, figure title.
     leg_loc: input, int, number of legend columns. 
@@ -469,7 +484,8 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
     # 3. create colormap, norm and legend (two options)
     # method 1. use user-specified cmap
     if cmap_str!='user':
-        vals = np.arange(int(data_unique.max()+1))/float(data_unique.max())
+    #     vals = np.arange(int(data_unique.max()+1))/float(data_unique.max())
+        vals = np.arange(len(data_unique)+1)/float(len(data_unique))
         colors =  mpl.cm.get_cmap(cmap_str)
         cols = colors(vals)
         cmap = mpl.colors.ListedColormap(cols, int(data_unique.max())+1)
@@ -495,6 +511,7 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
             count_record.append([data_i,data_i_label,int(data_counts[data_unique==data_i])])
             colors.append(data_i_color)
         cmap = ListedColormap(colors, len(data_unique)) # generate your own cmap    
+    print(legend_labels)
 
     ## Part 2. plot
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
@@ -504,11 +521,7 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
     raster_image = rasterio.plot.show(data_ma,ax=ax,cmap=cmap,transform=src.transform)
 
     # 2.2. plot legend
-    if cmap_str!='user':
-        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1][1]) for key in legend_labels]
-    else:
-        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
-
+    patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
     plt.legend(handles=patches, bbox_to_anchor=leg_bbox_to_anchor, loc=leg_loc, ncol=leg_ncol, fancybox=True)
 
     ax.set_xlabel('Longitude')
@@ -523,7 +536,7 @@ def plot_raster(inraster,wgs_crs,cmap_str,input_dict,
         f.write('#RasterValue,Label,Count,Proportion\n')
         for i in range(len(count_record)):
             f.write('%d,%s,%d,%.4f\n'%(count_record[i][0],count_record[i][1],count_record[i][2],
-                                       count_record[i][2]/float(count_sum)))  
+                                       count_record[i][2]/float(count_sum)))   
     return
 
 def plot_raster_and_bound_stream(inraster,bound_vector,stream_vector,wgs_crs,cmap_str,input_dict,
@@ -573,7 +586,7 @@ def plot_raster_and_bound_stream(inraster,bound_vector,stream_vector,wgs_crs,cma
     # 3. create colormap, norm and legend (two options)
     # method 1. use user-specified cmap
     if cmap_str!='user':
-        vals = np.arange(int(data_unique.max()+1))/float(data_unique.max())
+        vals = np.arange(len(data_unique)+1)/float(len(data_unique))
         colors =  mpl.cm.get_cmap(cmap_str)
         cols = colors(vals)
         cmap = mpl.colors.ListedColormap(cols, int(data_unique.max())+1)
@@ -620,11 +633,7 @@ def plot_raster_and_bound_stream(inraster,bound_vector,stream_vector,wgs_crs,cma
     stream_gpd_prj.plot(color='darkblue', linewidth=1.5, ax=ax)
 
     # 2.3. plot legend
-    if cmap_str!='user':
-        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1][1]) for key in legend_labels]
-    else:
-        patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
-
+    patches = [Patch(color=legend_labels[key][0], label=legend_labels[key][1]) for key in legend_labels]
     basin_bound = mpl.patches.Patch(edgecolor='black', linewidth=1, fill=False, label='Basin')
     patches.append(basin_bound)
 

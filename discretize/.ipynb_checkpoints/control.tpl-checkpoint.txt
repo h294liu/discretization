@@ -9,10 +9,12 @@
 root_path              | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize              # root path where data will be stored.
 source_path            | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data  # path where projected large-domain data are stored.
 domain_name            | shoshone   # use as the domain folder name for the prepared data.
+domain_extent          | 44.7/-110.21/44.18/-109.31     # Bounding box of the domain: lat_max/lon_min/lat_min/lon_max. Will be used in input preparation. Order and use of '/' to separate values is mandatory.
+
 
 ## ---- PART 2. Large-domain input data settings (used for crop) ----
 dem_raster             | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/MERIT_Hydro_dem_NLDAS.tif  
-landcover_raster       | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/nldas_landcover.tif  
+landcover_raster       | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/annual_climate_lc.tif 
 soil_raster            | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/usda_mode_soilclass_vCompressed_NA_250m_ll.tif  
 stream_shp             | /Users/hongliliu/Documents/prj/2020_06_02HRUcomplexity/discretize/source_data/riv_pfaf_7_MERIT_Hydro_v07_Basins_v01_wUS.shp 
 

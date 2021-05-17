@@ -83,7 +83,7 @@ def convert_aspect_180(in_aspect_raster, out_aspect_raster):
         outf.write(out_arr_ma,1)       
     return
     
-def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_dtype,refraster,outraster,gru_corr_txt,nodatavalue):
+def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_dtype,refraster,outraster,gru_corr_txt):
     # reference: https://gis.stackexchange.com/questions/151339/rasterize-a-shapefile-with-geopandas-or-fiona-python
     '''
     invector: input, vector, the vector to be rasterized.
@@ -93,9 +93,8 @@ def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_
     gruNo_field_dtype: input, str, data type of gruNo_field, used to specify dtype of output raster.
     refraster: input, raster, reference raster to get meta. 
     outraster: output, raster, path of output raster.
-    gru_corr_txt: output, txt, gruNo-gruName correspondence relationship.
-    nodatavalue: input, int, use to fill no data grids.
-    '''
+    gru_corr_txt: output, txt, gruNo-gruName correspondence relationship.    '''
+    
     # open input vector
     in_gdf = gpd.read_file(invector)  
     in_gdf = in_gdf.sort_values(by=[infield])
@@ -117,7 +116,8 @@ def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_
     with rio.open(refraster) as src:                 
         ref_mask = src.read_masks(1)
         meta = src.meta.copy()
-    meta.update(count=1, dtype=gruNo_field_dtype, compress='lzw', nodata=nodatavalue)
+        nodatavals = src.nodatavals
+    meta.update(count=1, dtype=gruNo_field_dtype, compress='lzw')
 
     with rio.open(outraster, 'w+', **meta) as out:
         out_arr = out.read(1)
@@ -126,7 +126,7 @@ def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_
         # this is where we create a generator of geom, value pairs to use in rasterizing
         shapes = ((geom,value) for geom, value in zip(in_gdf['geometry'], in_gdf[gruNo_field]))  
         # Areas not covered by input geometries are replaced with an optional fill value, which defaults to 0.
-        burned = rio.features.rasterize(shapes=shapes, out=out_arr, fill=nodatavalue, transform=out.transform)
+        burned = rio.features.rasterize(shapes=shapes, out=out_arr, fill=nodatavals, transform=out.transform)
         burned_ma = np.ma.masked_array(burned, ref_mask==0)
         out.write(burned_ma,1) 
     
@@ -134,16 +134,15 @@ def rasterize_gru_vector(invector,infield,gruName_field,gruNo_field,gruNo_field_
     in_gdf.to_file(invector) 
     return
 
-def rasterize_vector(invector,infield,infield_dtype,refraster,outraster,nodatavalue):
+def rasterize_vector(invector,infield,infield_dtype,refraster,outraster):
     # reference: https://gis.stackexchange.com/questions/151339/rasterize-a-shapefile-with-geopandas-or-fiona-python
     '''
     invector: input, vector, the vector to be rasterized.
     infield: input, string. field of input vector to use as a burn-in value.
     infield_dtype: input, string. data type of infield, used to rasterize invector. Avaialble dtypes for rasterio: 'int16', 'int32', 'float32', 'float64'(reference: https://test2.biogeo.ucdavis.edu/rasterio/_modules/rasterio/dtypes.html)
     refraster: input, raster, reference raster to get meta. 
-    outraster: output, raster, path of output raster.
-    nodatavalue: input, int, use to fill no data grids.
-    '''
+    outraster: output, raster, path of output raster.    '''
+    
     # open input vector
     in_gdf = gpd.read_file(invector)    
         
@@ -151,7 +150,8 @@ def rasterize_vector(invector,infield,infield_dtype,refraster,outraster,nodatava
     with rio.open(refraster) as src:                 
         ref_mask = src.read_masks(1)
         meta = src.meta.copy()
-    meta.update(count=1, dtype=infield_dtype, compress='lzw', nodata=nodatavalue) 
+        nodatavals = src.nodatavals
+    meta.update(count=1, dtype=infield_dtype, compress='lzw') 
     
     with rio.open(outraster, 'w+', **meta) as out:
         out_arr = out.read(1)
@@ -162,7 +162,7 @@ def rasterize_vector(invector,infield,infield_dtype,refraster,outraster,nodatava
         # Areas not covered by input geometries are replaced with an fill value.
         # Note that this process may induce pixels missing if the pixels' center is not within the polygon.
         # reference: https://rasterio.readthedocs.io/en/latest/api/rasterio.features.html
-        burned = rio.features.rasterize(shapes=shapes, out=out_arr, fill=nodatavalue, transform=out.transform)
+        burned = rio.features.rasterize(shapes=shapes, out=out_arr, fill=nodatavals, transform=out.transform)
         burned_ma = np.ma.masked_array(burned, ref_mask==0)
         out.write(burned_ma,1)    
     return
@@ -264,7 +264,7 @@ def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
                 # slope in degree [0, 90]
                 slope[i,j] = np.degrees(np.arctan(rise_run))
 
-                # aspect in [-180, 180]
+                # aspect in degree [-180, 180]
                 aspect0 = np.degrees(np.arctan2(dzdy,-dzdx))
                 # convert to compass direction values (0-360 degrees)
                 if aspect0 < 0:
@@ -274,7 +274,10 @@ def calculate_slope_and_aspect(dem_raster,slope_raster,aspect_raster):
                 else:
                     cell = 90.0 - aspect0
                 aspect[i,j] = cell
-
+    
+    # let aspect = -1 for flat grids (slope=0).
+    aspect[slope==0.0] = -1
+    
     # save slope and aspect into raster
     with rio.open(slope_raster, 'w', **out_meta) as outf:
         slope_ma = np.ma.masked_array(slope, mask==0)
@@ -326,7 +329,7 @@ def resample_raster(inraster,refraster,outraster):
     # reference: https://gis.stackexchange.com/questions/271226/up-sampling-increasing-resolution-raster-image-using-gdal
     return
 
-def resample_raster_scale(inraster,scale_factor,outraster,nodatavalue):
+def resample_raster_scale(inraster,scale_factor,outraster):
     # This function is used when the scale_factor is provided by users. The function has not been used in this project yet, but it's put here in case it can be used later.
     with rio.open(inraster) as dataset:
 
@@ -349,12 +352,12 @@ def resample_raster_scale(inraster,scale_factor,outraster,nodatavalue):
                         width=int(dataset.width * scale_factor))
 
         with rio.open(outraster, 'w', **out_meta) as outf:
-            out_arr_ma = np.ma.masked_array(data, data==nodatavalue)
+            out_arr_ma = np.ma.masked_array(data, data==dataset.nodatavals)
             outf.write(out_arr_ma) 
         return
     
     
-def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outraster, value_outraster, nodatavalue):
+def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outraster, value_outraster):
     '''
     bound_raster: input, raster, boundary as mask to classify inraster per boundary unit (eg, GRU raster).
     inraster: input, raster, continuous raster file.
@@ -367,8 +370,7 @@ def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outrast
         including the rightmost edge, allowing for non-uniform bin widths.
         - If bins is a string, it defines the method used to calculate the bin edge sequence.
     class_outraster: output, raster, output raster of class.
-    value_outraster: output, raster, output raster of mean value per class. 
-    nodatavalue'''
+    value_outraster: output, raster, output raster of mean value per class. '''
     
     # read inraster data
     with rio.open(inraster) as ff:
@@ -383,8 +385,8 @@ def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outrast
     unique_bounds = np.unique(bounds[bounds_mask!=0])
 
     # define array in the same shape of data, and specify dtype!
-    data_class = np.ones(np.shape(data), dtype=np.int32)*int(nodatavalue)
-    data_value = np.ones(np.shape(data), dtype=np.float64)*int(nodatavalue)
+    data_class = data.copy()
+    data_value = data.copy()
 
     # reclassify raster 
     # (1) if 'bins' is a string
@@ -434,28 +436,26 @@ def classify_raster(inraster, bound_raster, classif_trigger, bins, class_outrast
                 data_class[smask] = ibin+1  # ele_band starts from one, not zero.
                 data_value[smask] = np.mean(data[smask])     
 
-    # mask data_class and data_value
-    data_class_ma = np.ma.masked_array(data_class,data_mask==0)
-    data_value_ma = np.ma.masked_array(data_value,data_mask==0) 
-
     # save data_class_ma and data_value_ma into rasters
     # update data type of meta and save raster
-    # avaialble dtypes for rasterio: 'int16', 'int32', 'float32', 'float64' 
-    # reference: https://test2.biogeo.ucdavis.edu/rasterio/_modules/rasterio/dtypes.html
-    out_meta.update(count=1, dtype='int32', compress='lzw', nodata=nodatavalue)
+    data_class = data_class.astype('int32') 
+    out_meta.update(count=1, dtype='int32', compress='lzw')
     with rio.open(class_outraster, 'w', **out_meta) as outf:
+        data_class_ma = np.ma.masked_array(data_class,data_mask==0)
         outf.write(data_class_ma, 1)    
+
     # update data type of meta and save raster
-    out_meta.update(count=1, dtype='float64', compress='lzw', nodata=nodatavalue)
+    data_value = data_value.astype('float64') 
+    out_meta.update(count=1, dtype='float64', compress='lzw')
     with rio.open(value_outraster, 'w', **out_meta) as outf:
+        data_value_ma = np.ma.masked_array(data_value,data_mask==0) 
         outf.write(data_value_ma, 1)
     return
 
-def classify_landcover(lc_raster, lc_class_raster, nodatavalue):
+def classify_landcover(lc_raster, lc_class_raster):
     '''
     lc_raster: input, raster, landcover raster file.
-    lc_class_raster: output, raster, raster class file.
-    nodatavalue'''
+    lc_class_raster: output, raster, raster class file.'''
     
     # read landcover data
     with rio.open(lc_raster) as ff:
@@ -464,7 +464,7 @@ def classify_landcover(lc_raster, lc_class_raster, nodatavalue):
         out_meta = ff.meta.copy()
 
     # define array and specify dtype!
-    lc_class = np.ones(np.shape(lc), dtype=np.int32)*int(nodatavalue)
+    lc_class = lc.copy()
 
     # specify landcover class
     # lc_class 1: crop. 2: non-crop. 
@@ -473,14 +473,15 @@ def classify_landcover(lc_raster, lc_class_raster, nodatavalue):
     lc_class[(lc<=5) | (lc==7)]=1  # crop
     lc_class[(lc>5) & (lc!=7) & (lc!=255)]=2 # non-crop    
 
-    # mask lc_class
-    lc_class_ma = np.ma.masked_array(lc_class,lc_mask==0)
-
-    # save lc_class_ma into rasters
+    # convert class dtype from float to int
     # avaialble dtypes for rasterio: 'int16', 'int32', 'float32', 'float64' 
     # reference: https://test2.biogeo.ucdavis.edu/rasterio/_modules/rasterio/dtypes.html
-    out_meta.update(count=1, dtype='int32', compress='lzw', nodata=nodatavalue)
+    lc_class = lc_class.astype('int32') 
+    out_meta.update(count=1, dtype='int32', compress='lzw')
+    
+    # save data_class to raster
     with rio.open(lc_class_raster, 'w', **out_meta) as outf:
+        lc_class_ma = np.ma.masked_array(lc_class,lc_mask==0)
         outf.write(lc_class_ma, 1)    
     return
 
@@ -489,8 +490,7 @@ def classify_aspect(aspect_raster, class_num, class_outraster):
     inraster: input, raster, continuous raster file.
     class_num: input, int, it defines the number of desired aspect classes. 
     class_outraster: output, raster, output raster of class.
-    value_outraster: output, raster, output raster of mean value per class. 
-    nodatavalue'''
+    value_outraster: output, raster, output raster of mean value per class. '''
     
     # read aspect_raster
     with rio.open(aspect_raster) as ff:
@@ -534,10 +534,9 @@ def classify_aspect(aspect_raster, class_num, class_outraster):
         outf.write(data_class_ma, 1)    
     return
 
-def polygonize_raster(inraster, nodatavalue, outvector, attrb_field, attrb_field_dtype):
+def polygonize_raster(inraster, outvector, attrb_field, attrb_field_dtype):
     '''
     inraster: input, raster, source to convert to vector.
-    nodatavalue: input, int, no data value of the inraster.
     outvector: output, vector, output vector.
     attrb_field: input, str, attribute field name of vector attribtue table to save raster values.
     attrb_field_dtype: input, str, type of the output attribute field. For example, int'''
@@ -567,13 +566,12 @@ def polygonize_raster(inraster, nodatavalue, outvector, attrb_field, attrb_field
     return
 
 def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gruNo_field, gruName_field,
-               nodatavalue, outraster, outvector, hruNo_field, hruNo_field_dtype, hruName_field):
+               outraster, outvector, hruNo_field, hruNo_field_dtype, hruName_field):
     '''
     raster_list: input, list, a list raster inputs that are used to define HRU.
     raster_fieldname_list: input, str, a list of field names corresponding to raster_list.
     gru_raster: input, raster, gru input raster.
     gru_corr_txt: input, text, gruNo-HUC12 correspondence txt file.
-    nodatavalue: no data value for HRU polygonization.
     outraster: output, raster, HRU raster with integer value.
     outvector: output, raster, HRU vector with HRU_full and HRU_int fields. '''
     
@@ -622,10 +620,13 @@ def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gru
 
     # --- PART 2. polgonize HRU and add attributes ---
     # polygonize hru rater
-    polygonize_raster(outraster, nodatavalue, outvector, hruNo_field, hruNo_field_dtype)
+    polygonize_raster(outraster, outvector, hruNo_field, hruNo_field_dtype)
 
     # dissolve and exclude HRU=0 blank area
     hru_gpd = gpd.read_file(outvector)
+    # use buffer(0) to fix self-intersection issue
+    hru_gpd['geometry'] = hru_gpd.geometry.buffer(0)
+    
     hru_gpd_disv = hru_gpd.dissolve(by=hruNo_field)
     hru_gpd_disv = hru_gpd_disv.reset_index()
     hru_gpd_disv = hru_gpd_disv.loc[hru_gpd_disv.loc[:,hruNo_field] > 0]
@@ -686,7 +687,7 @@ def define_hru(raster_list, raster_fieldname_list, gru_raster, gru_corr_txt, gru
     hru_gpd_disv.to_file(outvector, index=False)
     return
 
-def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruName_field, hruNo_field, hruNo_field_dtype, hruName_field, hruArea_field, raster_fieldname_list, refraster, hru_vector_disv, hru_raster_disv,nodatavalue):
+def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruName_field, hruNo_field, hruNo_field_dtype, hruName_field, hruArea_field, raster_fieldname_list, refraster, hru_vector_disv, hru_raster_disv):
     # method 1. replace small HRU attibutes with the most dominant HRU's
     in_gpd = gpd.read_file(hru_vector)
     in_gpd_disv = in_gpd.copy()
@@ -737,13 +738,13 @@ def eliminate_small_hrus_dominant(hru_vector, hru_area_thld, gruNo_field, gruNam
     in_gpd_disv.to_file(hru_vector_disv, index=False)
 
     # PART 3. convert hru_vector_disv to raster for zonal statistics
-    rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv,nodatavalue)
+    rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv)
     return
 
 def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_field, gruName_field, 
                                   hruNo_field, hruNo_field_dtype, hruName_field, 
                                   hruArea_field, raster_fieldname_list, refraster, hru_vector_disv, 
-                                  hru_raster_disv,nodatavalue):
+                                  hru_raster_disv):
 
     # method 2: change HRU attribute to its' largest neighbor's HRU
     in_gpd = gpd.read_file(hru_vector)
@@ -840,17 +841,16 @@ def eliminate_small_hrus_neighbor(hru_vector, hru_thld_type, hru_thld, gruNo_fie
     in_gpd_disv.to_file(hru_vector_disv, index=False)
 
     # PART 3. convert hru_vector_disv to raster for zonal statistics
-    rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv,nodatavalue)
+    rasterize_vector(hru_vector_disv,hruNo_field, hruNo_field_dtype,refraster,hru_raster_disv)
     return
 
-def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, metric, out_raster, nodatavalue, *args, **kwargs):
+def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, metric, out_raster, *args, **kwargs):
     '''
     attr_raster: input, raster. Raster to analyze.
     invector: input, vector. Vector with zones boundaries.
     infield: input, string. Field name of invector that is used to identify zone of invector.
     infield_dtype: input, string. data type of infield, used to rasterize invector.
     metric: input, string. metric to calcualte zonal statistics. Choose from 'mean', 'median', 'max', 'min'.
-    nodatavalue: no data value.   
     out_raster: output, raster. Raster to save the zonal attribtue value of invector. 
     raster_band: optional input, integer. Number of raster band to analyze.
     output_column_prefix: optional input, str. Prefix for output fields.'''
@@ -880,7 +880,7 @@ def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, me
         attr_raster=attr_raster_resample
     # convert invector into the chosen refraster resolution
     in_raster = os.path.join(os.path.dirname(invector), os.path.basename(invector).split('.')[0]+'tmp.shp')    
-    rasterize_vector(invector,infield,infield_dtype,refraster,in_raster,nodatavalue)
+    rasterize_vector(invector,infield,infield_dtype,refraster,in_raster)
 
     # --- PART 2. loop through HRU to get attribute value ---
     # read invector
@@ -899,7 +899,7 @@ def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, me
     in_gpd[output_column_prefix] = "" 
 
     # initialize the output array
-    output_array = (np.ones_like(attr_raster_value))*nodatavalue
+    output_array = attr_raster_value.copy()
     
     # loop through invector polygons
     unique_field_value = np.unique(in_raster_value[in_raster_mask!=0])
@@ -915,7 +915,7 @@ def zonal_statistic(attr_raster, invector, infield, infield_dtype, refraster, me
                 # Method: decompose the aspect angle into a 2D vector using sin and cos, average the vectors, and then recompose them into an angle with arctan2.
                 # Note: arctan is the 2-quadrant inverse tangent, it takes only one input value x/y. Its result is in [-90,90].
                 # Note: arctan2 is the 4-quadrant inverse tangent, it takes two input arguments x and y. Its result is in [-180,180].
-                attr_smask = np.where(attr_smask==0.0,np.nan,attr_smask) # exclude flat grids (gdal flat aspect=0)
+                attr_smask = np.where(attr_smask==0.0,np.nan,attr_smask) # exclude flat grids (flat aspect=-1)
                 
                 y = np.sin(np.radians(attr_smask)) # north/south vector (positive to N)
                 x = np.cos(np.radians(attr_smask)) # west/east vector (positive to E)

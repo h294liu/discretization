@@ -15,21 +15,40 @@ When read mask use ff.read_masks(1), it by default returns mask in the first for
 
 import os
 
+# # Function to extract a given setting from the configuration file
+# def read_from_control(control_file, setting):
+    
+#     # Open 'control_active.txt' and ...
+#     with open(control_file) as contents:
+#         for line in contents:
+            
+#             # ... find the line with the requested setting
+#             if (setting in line) and (not line.startswith('#')):
+#                 break
+    
+#     # Extract the setting's value
+#     substring = line.split('|',1)[1]      # Remove the setting's name (split into 2 based on '|', keep only 2nd part)
+#     substring = substring.split('#',1)[0] # Remove comments, does nothing if no '#' is found
+#     substring = substring.strip()         # Remove leading and trailing whitespace, tabs, newlines
+       
+#     # Return this value    
+#     return substring
+
 # Function to extract a given setting from the configuration file
 def read_from_control(control_file, setting):
     
     # Open 'control_active.txt' and ...
     with open(control_file) as contents:
         for line in contents:
+            read_setting = line.split('|',1)[0].strip()
             
-            # ... find the line with the requested setting
-            if (setting in line) and (not line.startswith('#')):
+            # find the line with the requested setting
+            if (read_setting == setting) and (not line.startswith('#')):
                 break
-    
     # Extract the setting's value
     substring = line.split('|',1)[1]      # Remove the setting's name (split into 2 based on '|', keep only 2nd part)
     substring = substring.split('#',1)[0] # Remove comments, does nothing if no '#' is found
-    substring = substring.strip()         # Remove leading and trailing whitespace, tabs, newlines
+    substring = substring.strip()         # Remove leading and trailing whitespace, tabs, newlines                
        
     # Return this value    
     return substring
